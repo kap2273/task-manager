@@ -28,10 +28,10 @@ A user has a `notification_pref`: `"email"`, `"sms"`, or `"none"` (default `"non
 
 | Subagent | `python -m pytest -q` result | Files actually changed (`git diff --stat`) | Fix needed in same session? |
 |---|---|---|---|
-| SA-1 | | | |
-| SA-2 | | | |
-| SA-3 | | | |
-| SA-4 | | | |
+| SA-1 | 54 passed | `services/users.py` only | No |
+| SA-2 | 54 passed (no new tests by design; tests are SA-4's job) | `services/users.py` only | No |
+| SA-3 | 54 passed (no new tests by design) | `routes/api.py` only | No |
+| SA-4 | 74 passed (20 new) | `tests/test_users.py` (new) only | No; no test failed, so there was nothing to report |
 
 ## Exact prompts
 
@@ -123,10 +123,25 @@ Verification: python -m pytest -q passes.
 
 ## Divergence
 
-<!-- Fill in after all four subagents have run. -->
-
 **Did Claude follow the constraint field for every subagent?**
+
+Mostly, yes. After each subagent I checked which files had changed. Every subagent changed only its own Output file. The exceptions and near misses:
+
+- **SA-2 and the CLAUDE.md test rule.** CLAUDE.md says "Every new service function gets a test in tests/test_tasks.py." SA-2 added three service functions and no tests, because the SA-2 prompt explicitly told it to skip that rule for this session. An explicit instruction in the prompt overrode a standing CLAUDE.md rule. That is what I wanted here, but it also means any prompt can override CLAUDE.md.
+- **SA-3 nearly broke "no validation or if-statements in routes."** The PATCH route reads `data = request.get_json(silent=True) or {}` and then `data.get("notification_pref")`. Without the `or {}`, a missing body makes `None.get(...)` crash with a 500. Claude explained this and called it a default, not validation. It is still logic in routes/api.py that my constraint did not allow for.
+- **SA-3 broke "Only add the new names to the existing services.users import."** It added the three names, but also reformatted the one-line `from services.users import get_user` into a multi-line block.
+- **How the files were edited.** SA-2 appended its functions with a shell heredoc (`cat >> services/users.py <<'EOF'`). SA-3 rewrote the whole of routes/api.py with a Python script; the tool reported "+57 −39" even though only the import and three routes actually changed. Neither used Claude's normal Edit tool. I confirmed the existing routes were unchanged, but a full-file rewrite could have silently broken routes that SA-3 was told not to touch.
 
 **Did any subagent's output break the next subagent's assumption? How did you recover?**
 
+Yes, at the SA-2 → SA-3 hand-off. SA-2's hand-off was `update_notification_pref(user_id: int, pref: str)`, which expects a value already taken out of the request. SA-3 was told to do no validation, so it had to take the value out of the JSON body itself. That caused two problems:
+
+1. A **missing body** returns `None`. SA-3 recovered within the same session by adding `or {}`, so the service receives `None` and returns 422.
+2. A **body that is valid JSON but not an object**, e.g. `["sms"]` or `"sms"`, makes `get_json()` return a list or string with no `.get()`. That is still an unhandled 500 instead of a 422. **SA-4 did not catch it**: its prompt listed bad *values* (`"push"`, `""`, `"EMAIL"`, `None`, `5`) but not bad *body shapes*, so all 74 tests pass while the crash remains. Under my decomposition, nobody owned "is the body a JSON object?": SA-2 only saw the value, and SA-3 was told not to validate.
+
 **Would you write the decomposition differently a second time? What would you change?**
+
+- **Change SA-2's hand-off so the service takes the whole body**, the way `update_task(task_id, updates: dict)` already does in services/tasks.py: `update_notification_pref(user_id: int, body: dict | None)`. Then SA-2 owns all validation (missing body, non-object body, missing key, bad value), and SA-3's route is a true one-liner with no `or {}`.
+- **Add body-shape cases to SA-4's prompt:** no body, `[]`, `"sms"`, and `{}` should each return 422.
+- **Add "edit with the Edit tool only; do not rewrite whole files or write files from shell commands"** to every subagent's constraint, and **"do not reformat existing import lines"** to SA-3 and SA-4.
+- **Fix CLAUDE.md's test rule** ("every new service function gets a test in tests/test_tasks.py") before starting. It points at the wrong file for user code, and it directly conflicts with a "tests come in a later subagent" pipeline.

@@ -10,6 +10,8 @@ Run everything from the task-manager/ root.
 - Run one test: `pytest tests/test_tasks.py::test_get_task_invalid -v`
 - Lint: `ruff check <files you changed>`
 - Before finishing any task: `pytest -v` passes and `ruff check` is clean on changed files.
+- `pytest` and `ruff` are not on PATH on this machine: use `python -m pytest -q` (run after every
+  session or subagent step) and `python -m ruff check <files you changed>`.
 
 ## Architecture
 Layers: routes/ → services/ → repositories/. Calls only go left to right.
@@ -19,6 +21,10 @@ Layers: routes/ → services/ → repositories/. Calls only go left to right.
 - repositories/: does not exist yet. Data lives in `TASKS` (services/tasks.py) and
   `USERS` (services/users.py). Do not create repositories/ unless asked.
 - Canonical example: `get_user` in services/users.py + `get_user_route` in routes/api.py.
+- Layer boundary: a route in routes/api.py passes the raw query value or the whole
+  `request.get_json(silent=True)` body to exactly one services/ function and never checks or
+  defaults it; all type, value, and body-shape validation lives in services/, following the
+  `get_user` pattern in services/users.py.
 - Errors: a service raises e.g. `NotFoundError("Task")` → `handle_app_error` in
   routes/api.py turns it into `{"error": message}` with the right status code.
 - app.py registers the `api` blueprint with `url_prefix="/api"`.
@@ -44,4 +50,12 @@ Layers: routes/ → services/ → repositories/. Calls only go left to right.
   utils/errors.py. `handle_app_error` in routes/api.py depends on them.
 - Do not change URLs in routes/api.py or the `/api` prefix in app.py.
 - Do not add packages to requirements.txt without asking (Flask + pytest only).
+- Do not parse, default, or validate request bodies in new routes in routes/api.py
+  (no `get_json(...) or {}`, no `data.get("field")`). Pass the whole body to the services/
+  function, like `update_task_route` does.
+- Do not reformat, reorder, or remove existing import lines in routes/api.py, services/*.py,
+  or tests/*.py. Only add the one new name you need to an existing import.
+- Do not rewrite routes/api.py or services/users.py as a whole file, and do not write to them
+  with shell commands (`cat >>`, Python scripts). Use targeted edits so existing routes and
+  functions stay unchanged.
 - If a task seems to need any of the above, stop and explain why instead of editing.
