@@ -1,0 +1,6 @@
+# Command Log
+
+| Command | $ARGUMENTS | Stayed in scope? | What worked / what I changed |
+|---|---|---|---|
+| `/audit-errors` | `services/tasks.py` | Yes | It fixed `process_order` (raw KeyError) and also `create_task`, where a non-string title or a list user_id leaked a raw AttributeError/TypeError, then skipped the other five and ran pytest (74 passed) and ruff after each fix; the one surprise was that a string user_id like `"1"` quietly went from 404 to 422, so I'm adding a constraint that makes Claude list any status-code change before it edits. |
+| `/scaffold-endpoint` | `tags POST` | Yes | The route came out as a one-line pass-through to `create_tag` with all validation in services/tags.py, and pytest went to 75 passed with a 201 happy-path test; my first try with `/project:scaffold-endpoint` failed as an unknown command because my Claude Code version dropped the prefix, and since the command never said which fields a tag has, Claude guessed `name` only, so I added a constraint telling it to ask for the fields when $ARGUMENTS doesn't make them obvious. |

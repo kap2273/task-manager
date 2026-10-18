@@ -270,3 +270,9 @@ def test_list_tasks_route_sort():
     bad_priority = client.get("/api/tasks?priority=9&sort=priority")
     assert bad_priority.status_code == 422
     assert bad_priority.get_json() == {"error": "Invalid priority: must be between 1 and 5"}
+
+def test_process_order_unknown_task_raises_not_found():
+    with pytest.raises(NotFoundError) as exc_info:
+        process_order(999)
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.message == "Task not found"
