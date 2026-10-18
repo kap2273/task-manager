@@ -12,6 +12,13 @@ Run everything from the task-manager/ root.
 - Before finishing any task: `pytest -v` passes and `ruff check` is clean on changed files.
 - `pytest` and `ruff` are not on PATH on this machine: use `python -m pytest -q` (run after every
   session or subagent step) and `python -m ruff check <files you changed>`.
+- Slash commands (files in .claude/commands/, run inside Claude Code):
+  - `/audit-errors <file>`: run after changing a service file. Fixes functions that let a raw
+    KeyError/TypeError escape by raising AppError subclasses, and skips ones already correct.
+  - `/scaffold-endpoint <resource> <METHOD>`: run when you need a new API route. Adds the route
+    to routes/api.py, the service in services/, the schema in schemas/, and a happy-path test.
+  - `/add-tests <service file> <function>`: run after adding or changing a service function.
+    Adds a happy-path test and one test per error it raises, without touching existing tests.
 
 ## Architecture
 Layers: routes/ → services/ → repositories/. Calls only go left to right.
@@ -46,10 +53,7 @@ Layers: routes/ → services/ → repositories/. Calls only go left to right.
   services/tasks.py. routes/api.py and tests/test_tasks.py call them.
 - Do not edit, delete, or weaken existing tests in tests/test_tasks.py to make them
   pass. Fix the code, or add a new test.
-- Do not change `AppError.__init__` or its `message` / `status_code` attributes in
-  utils/errors.py. `handle_app_error` in routes/api.py depends on them.
 - Do not change URLs in routes/api.py or the `/api` prefix in app.py.
-- Do not add packages to requirements.txt without asking (Flask + pytest only).
 - Do not parse, default, or validate request bodies in new routes in routes/api.py
   (no `get_json(...) or {}`, no `data.get("field")`). Pass the whole body to the services/
   function, like `update_task_route` does.
@@ -59,3 +63,18 @@ Layers: routes/ → services/ → repositories/. Calls only go left to right.
   with shell commands (`cat >>`, Python scripts). Use targeted edits so existing routes and
   functions stay unchanged.
 - If a task seems to need any of the above, stop and explain why instead of editing.
+
+## Hooks
+.claude/hooks/guard_writes.py is a PreToolUse hook, registered in .claude/settings.json for the
+Write, Edit, MultiEdit and Bash tools, that runs before each of those calls and blocks it by
+exiting 2 with the reason printed for Claude. It blocks any write to the files in `BLOCKED_PATHS`
+(utils/errors.py and requirements.txt), whether through Edit/Write or a shell command like
+`echo > file`, with paths compared in lowercase; it also blocks writes to services/tasks.py that
+contain a hardcoded `postgresql://` or `sqlite://` URL, and Bash commands matching
+`BLOCKED_COMMANDS` (DROP/TRUNCATE TABLE, rm -rf, git push --force). To protect another file, add
+its lowercase, forward-slash path to `BLOCKED_PATHS`; to ban another shell command, add a
+`(re.compile(r"\b...\b"), "label")` pair to `BLOCKED_COMMANDS` using word boundaries, not plain
+substrings. Then pipe a sample event into the script, e.g.
+`echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf x"}}' | python .claude/hooks/guard_writes.py`,
+and check that it exits 2 and `python -m pytest -q` still passes. If the hook blocks something
+you really need, ask the user instead of working around it.

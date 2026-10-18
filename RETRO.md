@@ -1,3 +1,23 @@
+# RETRO: Week 6
+
+## 1. Slash command value
+
+`/scaffold-endpoint` saved the most prompt-writing (COMMAND_LOG.md row 2, `$ARGUMENTS` = `tags POST`). One line produced four files: services/tags.py, schemas/tags.py, tests/test_tags.py, and a three-line `create_tag_route` in routes/api.py, with pytest going from 74 to 75 passed. The ad-hoc version would be a paragraph I'd have to retype for every new resource: which files to create, that the route should follow `update_task_route`, that the route can't validate or use `.get()` defaults, that errors come from utils/errors.py, that I can't add packages, and which status code the test should assert. When I've written that kind of prompt by hand I've left things out. In Week 5 Session 1, Claude put `data.get("priority", DEFAULT_PRIORITY)` in the route because nothing told it not to. The command carries every one of those rules each time, so the route came out as a pure pass-through on the first run. It also gives me one place to fix things. Claude guessed that a tag only has a `name`, so I added one Constraint line telling it to ask for the fields, and every future run gets that rule without me remembering it.
+
+## 2. Hook reliability
+
+Vector 2 got through completely. After `/clear` I asked Claude to use bash to write `# bypass test` to utils/errors.py. It refused at first because of CLAUDE.md, so I told it to run the write as a test of the hook. It ran `echo "# bypass test" > utils/errors.py`, the hook fired and exited 0, and `git diff` showed all 13 lines of AppError, NotFoundError and ValidationError replaced by one comment. Bash had been in the settings.json matcher the whole time, but `check_bash` only looked for `rm -rf`, `DROP TABLE` and force-push, so the protected-path rule only existed for Edit and Write. Vector 1 was blocked, though only partly by the hook. Claude rewrote `Utils/errors.py` to `utils\errors.py` on its own before calling Edit, and when I piped the capital-U path straight into guard_writes.py it exited 0, because `endswith` is case-sensitive and Windows paths aren't. So "the rule is in settings.json" only means the script runs. The rule is enforced only if every way of reaching the file goes through a branch that checks it, and I found both missing branches by attacking the hook, not by reading settings.json. In both vectors, what stopped the first attempt was Claude choosing to follow CLAUDE.md, which is the advisory behavior the hook was supposed to replace. My Week 5 RETRO paragraph 4 had already noted that SA-2 wrote services/users.py with a `cat >>` heredoc that an Edit/Write-only hook wouldn't see. Vector 2 is that same gap.
+
+## 3. Advisory vs. deterministic
+
+"Do not edit, delete, or weaken existing tests in tests/test_tasks.py" is still advisory. I can't block the file by path, because `/add-tests` is supposed to append new tests to it, and the hook only sees one tool call at a time with no memory of what the file looked like before. So far the rule has held: in the `/add-tests` run (COMMAND_LOG.md row 3), ruff flagged two old tests that use `pytest.raises(Exception)`, and Claude left them alone and asked me before tightening them. I'll graduate it the first time `git diff tests/` after a session shows a removed or changed line inside an existing test function. Then I'd add a check to guard_writes.py that blocks any Edit on a file in tests/ where `new_string` doesn't contain `old_string` unchanged. An append keeps the old text and adds to it, so it passes. An edit that rewrites or deletes existing lines doesn't.
+
+## 4. Limits of hooks
+
+I wanted to enforce the Verification step from `/audit-errors`: `python -m pytest -q` has to pass after every function Claude changes. Right now Claude runs it only because the command asks. PreToolUse is the wrong event for this. It runs before the edit, when there's nothing new to test, and it only sees the proposed tool input, not how the code behaves once it's written. The right mechanism is a PostToolUse hook on `Write|Edit|MultiEdit` for files in services/ that runs pytest after each edit and exits 2 on failure, so Claude sees the failing output right away. That would make "after every function" automatic. It still wouldn't have caught everything. In the `/audit-errors` run (COMMAND_LOG.md row 1), a string user_id like `"1"` went from a 404 to a 422 and all 74 tests still passed, because no test covered that case. I only knew because Claude mentioned it, which is why `/add-tests` exists.
+
+---
+
 # RETRO — Week 5: Plan, Decompose, and Supervise
 
 ## 1. Plan Mode value
