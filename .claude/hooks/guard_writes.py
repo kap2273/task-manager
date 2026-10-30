@@ -89,7 +89,7 @@ def main() -> None:
 
     if tool_name in ("Write", "Edit", "MultiEdit"):
         check_file_write(tool_name, tool_input)
-    elif tool_name == "Bash":
+    elif tool_name in ("Bash", "PowerShell"):
         check_bash(tool_input)
 
     sys.exit(0)

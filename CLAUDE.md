@@ -66,7 +66,7 @@ Layers: routes/ → services/ → repositories/. Calls only go left to right.
 
 ## Hooks
 .claude/hooks/guard_writes.py is a PreToolUse hook, registered in .claude/settings.json for the
-Write, Edit, MultiEdit and Bash tools, that runs before each of those calls and blocks it by
+Write, Edit, MultiEdit, Bash and PowerShell tools, that runs before each of those calls and blocks it by
 exiting 2 with the reason printed for Claude. It blocks any write to the files in `BLOCKED_PATHS`
 (utils/errors.py and requirements.txt), whether through Edit/Write or a shell command like
 `echo > file`, with paths compared in lowercase; it also blocks writes to services/tasks.py that
