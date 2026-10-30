@@ -1,0 +1,25 @@
+#!/bin/sh
+# Rejects commits whose subject line isn't a conventional commit.
+
+subject=$(head -n 1 "$1" | tr -d '\r')
+
+# Let git's auto-generated merge and revert messages through
+case "$subject" in
+  "Merge "*|"Revert "*) exit 0 ;;
+esac
+
+pattern='^(feat|fix|test|refactor|docs|chore)(\([a-z0-9-]+\))?: .+$'
+
+if ! printf '%s\n' "$subject" | grep -Eq "$pattern"; then
+  echo "commit-msg: subject must look like 'type(scope): subject' or 'type: subject'" >&2
+  echo "  allowed types: feat, fix, test, refactor, docs, chore" >&2
+  echo "  got: $subject" >&2
+  exit 1
+fi
+
+if [ ${#subject} -gt 72 ]; then
+  echo "commit-msg: subject is ${#subject} characters, max is 72" >&2
+  exit 1
+fi
+
+exit 0
