@@ -4,3 +4,5 @@ __pycache__/
 .claude/worktrees/
 .venv/
 tasks.db
+
+create_db.py
