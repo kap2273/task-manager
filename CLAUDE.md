@@ -78,3 +78,13 @@ substrings. Then pipe a sample event into the script, e.g.
 `echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf x"}}' | python .claude/hooks/guard_writes.py`,
 and check that it exits 2 and `python -m pytest -q` still passes. If the hook blocks something
 you really need, ask the user instead of working around it.
+
+## Git Conventions
+- Commit format: `type(scope): subject` or `type: subject`. Types: feat, fix, test, refactor, docs, chore.
+- Scopes: tasks (services/tasks.py), api (routes/), schemas, utils, tests, hooks.
+- Subject: imperative mood, lowercase start, no trailing period, max 72 characters.
+- Branches: `feat/<name>` or `fix/<name>`, e.g. `feat/keyword-search`. Work never happens directly on master.
+- Before every commit run `pytest -q` from the activated .venv. Do not commit if any test fails.
+- Commit through `/ship`. One logical change per commit.
+- Never push to master or main. Never force-push. Never use `--no-verify`.
+- Never edit, skip, or delete an existing test just to make it pass.
