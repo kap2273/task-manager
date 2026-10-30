@@ -88,3 +88,4 @@ you really need, ask the user instead of working around it.
 - Commit through `/ship`. One logical change per commit.
 - Never push to master or main. Never force-push. Never use `--no-verify`.
 - Never edit, skip, or delete an existing test just to make it pass.
+- After cloning, run `git config core.hooksPath .githooks` to turn on the commit-msg hook.
